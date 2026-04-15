@@ -1,0 +1,390 @@
+schema_version: 1
+
+journey:
+  name: "Standalone UX Audit"
+  goal: "Analyze existing journey artifacts on demand and produce actionable UX findings, outside the DISCUSS flow"
+  personas:
+    - name: "Sara Okonkwo"
+      role: "Tech lead reviewing DISCUSS handoffs"
+      ux_expertise: "Medium"
+      motivation: "Audit a team member's journey before approving DESIGN handoff"
+    - name: "Yuki Tanaka"
+      role: "Solo developer building CLI tools"
+      ux_expertise: "Medium (general), Low (TUI-specific patterns)"
+      motivation: "Validate her own journey against TUI best practices"
+
+  trigger: "User invokes /nw-ux {feature-id} directly"
+  context: "Outside DISCUSS flow. Pre-existing journey artifacts in docs/feature/{id}/discuss/"
+
+  emotional_arc:
+    start: "Purposeful -- knows what she wants, invokes directly"
+    middle: "Evaluating -- building picture of UX quality across categories"
+    end: "Satisfied -- has evidence-based report to share or act on"
+
+  jtbd_grounding:
+    primary_jobs: [1, 2, 4]
+    top_outcomes:
+      - id: "1.3"
+        statement: "Maximize the confidence that error paths have adequate UX treatment"
+        score: 16
+      - id: "2.2"
+        statement: "Maximize the actionability of UX recommendations"
+        score: 17
+      - id: "4.2"
+        statement: "Minimize the time to detect terminology and pattern mismatches"
+        score: 13
+
+steps:
+  - id: 1
+    name: "Invocation"
+    action: "User runs /nw-ux {feature-id} and selects audit depth"
+    phase: "Entry"
+
+    tui_mockup: |
+      +-- nw-ux-auditor -----------------------------------------------+
+      |                                                                 |
+      |  nw-ux-auditor v${auditor_version}                              |
+      |                                                                 |
+      |  Feature: ${feature_id}                                         |
+      |  Mode: standalone                                               |
+      |                                                                 |
+      |  Select depth:                                                  |
+      |    > lightweight   (Nielsen top-5, error states -- ~2 min)      |
+      |      comprehensive (full heuristic audit + scores -- ~10 min)   |
+      |      deep-dive     (full audit + competitive + before/after)    |
+      |                                                                 |
+      +----------------------------------------------------------------+
+
+    shared_artifacts:
+      - name: "feature_id"
+        source: "CLI argument to /nw-ux"
+        displayed_as: "${feature_id}"
+        consumers: ["artifact discovery path", "report header", "ux-analysis.md path"]
+      - name: "depth_level"
+        source: "user selection (interactive or --depth flag)"
+        displayed_as: "${depth_level}"
+        consumers: ["audit scope", "report header", "time estimate"]
+      - name: "auditor_version"
+        source: "nw-ux-auditor agent metadata"
+        displayed_as: "${auditor_version}"
+        consumers: ["header display", "report metadata"]
+
+    emotional_state:
+      entry: "Purposeful -- Sara knows exactly what she wants"
+      exit: "Oriented -- depth selected, ready to proceed"
+
+    integration_checkpoint: |
+      Feature ID must resolve to docs/feature/{feature_id}/.
+      If --depth flag provided, skip interactive selection.
+      If --json flag provided, suppress interactive output.
+
+    failure_modes:
+      - "Feature directory does not exist -- show available features"
+      - "Invalid depth value from --depth flag -- show valid options"
+      - "Non-TTY environment with no --depth flag -- error requesting flag"
+
+    gherkin: |
+      Scenario: Sara invokes standalone audit for team member's feature
+        Given Sara is reviewing the "user-settings" feature
+        And docs/feature/user-settings/discuss/ contains journey artifacts
+        When Sara runs "/nw-ux user-settings"
+        Then the auditor displays feature name and mode
+        And presents depth selection with descriptions and time estimates
+        And Sara can select "comprehensive" using arrow keys
+
+      Scenario: Sara uses non-interactive invocation for batch audit
+        Given Sara wants to audit 3 features without interactive prompts
+        When Sara runs "/nw-ux user-settings --depth comprehensive --json"
+        Then the audit runs without interactive prompts
+        And output is JSON-formatted for scripting
+
+      Scenario: Feature ID does not exist
+        Given no directory exists for "user-settigns" (typo)
+        When Sara runs "/nw-ux user-settigns"
+        Then an error explains the directory was not found
+        And suggests similar feature IDs (did-you-mean: "user-settings")
+        And lists available features with artifact counts
+
+  - id: 2
+    name: "Artifact Discovery"
+    action: "Scan discuss/ folder for journey artifacts and detect platform"
+    phase: "Collection"
+
+    tui_mockup: |
+      +-- Artifact Discovery ------------------------------------------+
+      |                                                                 |
+      |  Scanning docs/feature/${feature_id}/discuss/...                |
+      |                                                                 |
+      |  Found:                                                         |
+      |    ${artifact_1_name}    (${artifact_1_size}, ${artifact_1_date})|
+      |    ${artifact_2_name}    (${artifact_2_size}, ${artifact_2_date})|
+      |    ${artifact_3_name}    (${artifact_3_size}, ${artifact_3_date})|
+      |                                                                 |
+      |  ${artifact_count} artifacts found. Detected platform: ${platform}|
+      |                                                                 |
+      |  ${staleness_warning}                                            |
+      |                                                                 |
+      |  Proceed? [${proceed_default}]                                   |
+      +----------------------------------------------------------------+
+
+    shared_artifacts:
+      - name: "artifact_list"
+        source: "filesystem glob of discuss/ directory"
+        displayed_as: "artifact rows with name, size, date"
+        consumers: ["audit engine input", "report metadata"]
+      - name: "platform"
+        source: "detected from journey YAML metadata or visual markdown content"
+        displayed_as: "${platform}"
+        consumers: ["audit category 4 (platform patterns)", "report header"]
+      - name: "previous_audit"
+        source: "existing ux-analysis.md in discuss/ (if present)"
+        displayed_as: "previous audit summary line"
+        consumers: ["delta computation in Step 4"]
+
+    emotional_state:
+      entry: "Expectant -- do the artifacts exist?"
+      exit: "Confirmed -- artifacts found, platform detected, ready to audit"
+
+    integration_checkpoint: |
+      At least one journey artifact must be found (visual.md or .yaml).
+      Platform must be detected (web, desktop, TUI) or requested from user.
+      If previous ux-analysis.md exists, note for delta comparison.
+      If artifacts are significantly older than other files, warn about staleness.
+
+    failure_modes:
+      - "No journey artifacts found -- guide to running DISCUSS first"
+      - "Artifacts detected as stale (60+ days older than recent changes)"
+      - "Platform cannot be auto-detected -- ask user to specify"
+      - "Previous audit exists -- offer re-audit with delta tracking"
+
+    gherkin: |
+      Scenario: All artifacts found with platform auto-detected
+        Given docs/feature/user-settings/discuss/ contains 4 artifacts
+        And journey-user-settings.yaml specifies platform as "web"
+        When the auditor scans the directory
+        Then all artifacts are listed with size and modification date
+        And platform is detected as "web" from YAML metadata
+        And the proceed prompt defaults to YES
+
+      Scenario: Stale artifacts trigger warning
+        Given journey artifacts were last modified 59 days ago
+        And user-stories.md was modified 2 days ago
+        When the auditor scans the directory
+        Then a warning states artifacts are significantly older than stories
+        And the proceed prompt defaults to NO
+        And the user can override with explicit confirmation
+
+      Scenario: Previous audit found enables delta tracking
+        Given ux-analysis.md already exists from a previous audit
+        And the previous score was 78/100 with 8 findings
+        When the auditor scans the directory
+        Then the previous audit summary is displayed
+        And the user is asked whether to run a new audit for progress tracking
+
+  - id: 3
+    name: "UX Audit Execution"
+    action: "Analyze artifacts against UX categories scoped by depth"
+    phase: "Analysis"
+
+    tui_mockup: |
+      +-- UX Audit ---------------------------------------------------+
+      |                                                                |
+      |  Running ${depth_level} UX audit...                            |
+      |                                                                |
+      |  [1/7] Nielsen's Usability Heuristics      ${cat_1_status}     |
+      |  [2/7] Norman's Design Principles          ${cat_2_status}     |
+      |  [3/7] Cognitive Load (Fitts, Hick, Miller) ${cat_3_status}    |
+      |  [4/7] ${platform} Platform Patterns       ${cat_4_status}     |
+      |  [5/7] Emotional Arc Coherence             ${cat_5_status}     |
+      |  [6/7] Error State Coverage                ${cat_6_status}     |
+      |  [7/7] Accessibility (WCAG 2.2 AA)         ${cat_7_status}     |
+      |                                                                |
+      |  Audit complete. ${finding_count} findings across              |
+      |  ${category_count} categories.                                 |
+      +----------------------------------------------------------------+
+
+    shared_artifacts:
+      - name: "finding_count"
+        source: "audit engine output"
+        displayed_as: "${finding_count}"
+        consumers: ["findings presentation", "report"]
+      - name: "category_scores"
+        source: "per-category evaluation results"
+        displayed_as: "category breakdown in findings"
+        consumers: ["findings presentation", "report", "delta computation"]
+
+    emotional_state:
+      entry: "Patient -- watching analysis progress"
+      exit: "Ready -- audit complete, anticipating results"
+
+    integration_checkpoint: |
+      Same as Journey A Step 3. Depth scoping applies:
+        lightweight -> categories 1 (top-5 only), 6
+        comprehensive -> all 7
+        deep-dive -> all 7 + competitive analysis
+
+    failure_modes:
+      - "Category analysis fails on malformed artifact -- skip with warning"
+      - "Audit takes longer than estimated -- show elapsed time"
+
+    gherkin: |
+      Scenario: Comprehensive audit with category breakdown
+        Given Sara selected "comprehensive" depth for "user-settings"
+        And all journey artifacts are loaded
+        When the audit executes
+        Then all 7 categories are evaluated with progress indicators
+        And each category produces a score out of 100
+        And total findings are counted and categorized by severity
+
+  - id: 4
+    name: "Findings Presentation"
+    action: "Display findings with category scores and optional delta from previous audit"
+    phase: "Results"
+
+    tui_mockup: |
+      +-- UX Audit Results -------------------------------------------+
+      |                                                                |
+      |  UX Audit Results: ${feature_id}                               |
+      |  Depth: ${depth_level} | Platform: ${platform}                 |
+      |  Duration: ${audit_duration}                                   |
+      |                                                                |
+      |  Score: ${overall_score}/100 ${delta_display}                   |
+      |                                                                |
+      |  Category Breakdown:                                           |
+      |    Nielsen's Heuristics     ${cat_1_score}  (${cat_1_findings}) |
+      |    Norman's Principles      ${cat_2_score}  (${cat_2_findings}) |
+      |    Cognitive Load           ${cat_3_score}  (${cat_3_findings}) |
+      |    ${platform} Patterns     ${cat_4_score}  (${cat_4_findings}) |
+      |    Emotional Arc            ${cat_5_score}  (${cat_5_findings}) |
+      |    Error State Coverage     ${cat_6_score}  (${cat_6_findings}) |
+      |    Accessibility            ${cat_7_score}  (${cat_7_findings}) |
+      |                                                                |
+      |  Top 3 findings:                                               |
+      |  ... (same format as Journey A Step 4) ...                     |
+      |                                                                |
+      |  Save to ux-analysis.md? [Y/n]                                 |
+      +----------------------------------------------------------------+
+
+    shared_artifacts:
+      - name: "overall_score"
+        source: "weighted aggregate of category scores"
+        displayed_as: "${overall_score}"
+        consumers: ["report header", "delta computation"]
+      - name: "delta_display"
+        source: "comparison with previous ux-analysis.md if exists"
+        displayed_as: "${delta_display} (e.g., '(was 78/100, +13 points)')"
+        consumers: ["findings header only"]
+      - name: "findings_list"
+        source: "audit engine, sorted by severity"
+        displayed_as: "finding blocks"
+        consumers: ["report", "user review"]
+
+    emotional_state:
+      entry: "Evaluating -- processing scores and findings"
+      exit: "Informed -- clear picture of journey UX quality"
+
+    integration_checkpoint: |
+      Category breakdown always shown in standalone mode (Sara needs granular view).
+      Delta computed if previous ux-analysis.md exists.
+      Resolved findings tracked separately from new/remaining findings.
+
+    failure_modes:
+      - "Previous audit used different depth level -- delta may not be apples-to-apples"
+      - "Score improved but new findings introduced -- show both resolved and new"
+
+    gherkin: |
+      Scenario: Sara sees category breakdown for team member's journey
+        Given the audit found 8 findings across 5 categories
+        And each category has a score out of 100
+        When findings are presented
+        Then the category breakdown shows scores for all 7 categories
+        And categories with zero findings show their score without "(0 findings)"
+        And the top 3 findings are shown with severity and remediation
+
+      Scenario: Re-audit shows improvement delta
+        Given a previous audit scored 78/100 with 8 findings
+        And the journey author addressed 5 findings
+        When the re-audit completes with score 91/100
+        Then the score shows "(was 78/100, +13 points)"
+        And resolved findings are listed separately from remaining findings
+        And a positive progress message is shown
+
+      Scenario: Re-audit at different depth shows warning
+        Given the previous audit was "lightweight" (score 85/100)
+        When Sara runs a "comprehensive" re-audit
+        Then a note explains the scores are not directly comparable
+        And the previous lightweight score is shown for reference
+        And the new comprehensive score is the primary display
+
+  - id: 5
+    name: "Report and Next Steps"
+    action: "Save report and guide user to next actions"
+    phase: "Completion"
+
+    tui_mockup: |
+      +-- Report Saved -----------------------------------------------+
+      |                                                                |
+      |  Saved: docs/feature/${feature_id}/discuss/ux-analysis.md      |
+      |                                                                |
+      |  Next steps:                                                   |
+      |    - Share findings with the journey author                     |
+      |    - Update journey artifacts to address critical/high findings |
+      |    - Re-run audit after changes: /nw-ux ${feature_id}           |
+      |                                                                |
+      |  To integrate findings into user stories:                       |
+      |    /nw-discuss ${feature_id} --enrich-from-ux                   |
+      +----------------------------------------------------------------+
+
+    shared_artifacts:
+      - name: "ux_analysis_path"
+        source: "docs/feature/{feature_id}/discuss/ux-analysis.md"
+        displayed_as: "${ux_analysis_path}"
+        consumers: ["journey author", "DISCUSS story enrichment", "DESIGN handoff"]
+
+    emotional_state:
+      entry: "Decisive -- saving the evidence"
+      exit: "Satisfied -- has actionable report and clear next steps"
+
+    integration_checkpoint: |
+      Report saved successfully.
+      Next-step commands shown are valid and invocable.
+      Story enrichment path (/nw-discuss --enrich-from-ux) documented.
+
+    failure_modes:
+      - "User declines to save -- findings lost (warn before exiting)"
+      - "File write fails -- show error with retry guidance"
+
+    gherkin: |
+      Scenario: Report saved with next steps for standalone review
+        Given Sara confirmed saving the report
+        When the report is generated
+        Then ux-analysis.md is created in the feature's discuss/ directory
+        And next steps include sharing with the journey author
+        And next steps include the command to re-run after changes
+        And next steps include the command to enrich stories from findings
+
+      Scenario: User declines to save
+        Given Sara reviews findings but decides not to save
+        When Sara declines the save prompt
+        Then a reminder notes findings will be lost when the session ends
+        And Sara can change her mind with a final confirmation
+
+integration_validation:
+  shared_artifact_consistency:
+    - artifact: "feature_id"
+      must_match_across: [1, 2, 3, 4, 5]
+      failure_message: "Feature ID from CLI argument must match throughout"
+    - artifact: "depth_level"
+      must_match_across: [1, 3, 4, 5]
+      failure_message: "Depth selected at invocation must be used consistently"
+    - artifact: "platform"
+      must_match_across: [2, 3, 4]
+      failure_message: "Platform detected must match audit scope and report labels"
+    - artifact: "findings_list"
+      must_match_across: [4, 5]
+      failure_message: "Findings displayed must match findings in saved report"
+
+changelog:
+  - date: "2026-04-15"
+    feature: "ux-analysis-discuss-integration"
+    change: "Initial journey design for standalone UX audit"

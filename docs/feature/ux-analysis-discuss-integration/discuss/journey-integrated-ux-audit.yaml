@@ -1,0 +1,479 @@
+schema_version: 1
+
+journey:
+  name: "Integrated UX Audit"
+  goal: "Validate journey UX quality against established principles during DISCUSS, before handoff to DESIGN, so problems are fixed as cheap text changes"
+  personas:
+    - name: "Marco Pellegrini"
+      role: "Backend developer building first web dashboard"
+      ux_expertise: "Low"
+      motivation: "Catch blind spots he cannot see"
+    - name: "Sara Okonkwo"
+      role: "Tech lead reviewing DISCUSS handoffs"
+      ux_expertise: "Medium"
+      motivation: "Systematic quality validation, not manual eyeballing"
+
+  trigger: "Phase 2 (Journey Visualization) completes during /nw-discuss"
+  context: "DISCUSS wave, after Decision 1 (Feature Type), before Phase 3 (User Story Mapping)"
+
+  emotional_arc:
+    start: "Curious but skeptical -- will this slow me down?"
+    middle: "Engaged -- seeing real issues in MY journey, not abstract theory"
+    end: "Confident and relieved -- my journey is stronger, problems caught early"
+
+  jtbd_grounding:
+    primary_jobs: [1, 2, 5]
+    top_outcomes:
+      - id: "2.2"
+        statement: "Maximize the actionability of UX recommendations"
+        score: 17
+      - id: "5.2"
+        statement: "Maximize the likelihood that features needing analysis actually receive it"
+        score: 17
+      - id: "1.3"
+        statement: "Maximize the confidence that error paths have adequate UX treatment"
+        score: 16
+
+steps:
+  - id: 1
+    name: "Smart Gating"
+    action: "nWave evaluates feature characteristics and recommends UX analysis depth"
+    phase: "After Decision 1 (Feature Type)"
+
+    tui_mockup: |
+      +-- Smart Gating -----------------------------------------------+
+      |                                                                |
+      |  UX Analysis                                                   |
+      |                                                                |
+      |  Recommended: ${recommendation}                                |
+      |  Depth: ${depth_level}                                         |
+      |  Reason: ${gate_reason}                                        |
+      |                                                                |
+      |  Proceed with UX analysis? [${default_prompt}]                 |
+      +----------------------------------------------------------------+
+
+    shared_artifacts:
+      - name: "feature_type"
+        source: "Decision 1 output from DISCUSS flow"
+        displayed_as: "${feature_type}"
+        consumers: ["smart gating evaluation", "depth recommendation"]
+      - name: "recommendation"
+        source: "smart gating evaluation logic"
+        displayed_as: "${recommendation}"
+        consumers: ["gating prompt", "ux-analysis.md header"]
+      - name: "depth_level"
+        source: "smart gating evaluation logic"
+        displayed_as: "${depth_level}"
+        consumers: ["audit execution scope", "ux-analysis.md header", "time estimate"]
+      - name: "gate_reason"
+        source: "smart gating evaluation logic"
+        displayed_as: "${gate_reason}"
+        consumers: ["gating prompt", "ux-analysis.md header"]
+      - name: "default_prompt"
+        source: "recommendation value (YES -> Y/n, NO -> y/N)"
+        displayed_as: "${default_prompt}"
+        consumers: ["user prompt"]
+
+    emotional_state:
+      entry: "Curious -- 'Do I need this?'"
+      exit: "Reassured -- the recommendation makes sense for THIS feature"
+
+    integration_checkpoint: |
+      Decision 1 (Feature Type) must be complete.
+      Feature characteristics (user-facing, interactive, platform, novelty) must be available.
+
+    failure_modes:
+      - "Feature type decision not yet made -- cannot evaluate characteristics"
+      - "Feature characteristics are ambiguous (e.g., internal tool with some user-facing elements)"
+      - "User overrides a YES recommendation without understanding the risk"
+
+    gherkin: |
+      Scenario: Smart gate recommends comprehensive audit for customer-facing feature
+        Given Marco has completed Decision 1 for "view-invoice-history"
+        And the feature is classified as "customer-facing web dashboard"
+        And the feature has interactive elements and high novelty
+        When nWave evaluates whether UX analysis is needed
+        Then the recommendation is "YES" at "comprehensive" depth
+        And the reason references "customer-facing" and "first implementation"
+        And the default prompt is "[Y/n]" (opt-out)
+
+      Scenario: Smart gate recommends skipping audit for internal utility
+        Given Yuki has completed Decision 1 for "reformat-config"
+        And the feature is classified as "internal CLI utility"
+        And the feature has no interactive elements and low novelty
+        When nWave evaluates whether UX analysis is needed
+        Then the recommendation is "NO"
+        And the reason references "internal utility" and "no interactive elements"
+        And the default prompt is "[y/N]" (opt-in)
+
+      Scenario: User overrides smart gate recommendation
+        Given nWave recommends "YES" for UX analysis at "comprehensive" depth
+        When Marco declines with "n"
+        Then nWave acknowledges the decision without guilt or nagging
+        And nWave shows the standalone command for later use
+        And DISCUSS continues to Phase 3
+
+  - id: 2
+    name: "Artifact Collection"
+    action: "nw-ux-auditor reads journey artifacts from discuss/ folder"
+    phase: "Phase 2.75 (start)"
+
+    tui_mockup: |
+      +-- Artifact Collection ----------------------------------------+
+      |                                                                |
+      |  Collecting journey artifacts...                               |
+      |    [1/3] ${visual_md_filename}    ${visual_status}             |
+      |    [2/3] ${yaml_filename}         ${yaml_status}               |
+      |    [3/3] shared-artifacts-registry.md  ${registry_status}      |
+      |                                                                |
+      |  ${artifact_count} artifacts collected. Starting ${depth_level}|
+      |  audit...                                                      |
+      +----------------------------------------------------------------+
+
+    shared_artifacts:
+      - name: "feature_id"
+        source: "DISCUSS flow context (from /nw-discuss invocation)"
+        displayed_as: "${feature_id}"
+        consumers: ["file path construction", "report header"]
+      - name: "visual_md_filename"
+        source: "glob: journey-*-visual.md in discuss/"
+        displayed_as: "${visual_md_filename}"
+        consumers: ["collection status display"]
+      - name: "yaml_filename"
+        source: "glob: journey-*.yaml in discuss/"
+        displayed_as: "${yaml_filename}"
+        consumers: ["collection status display"]
+      - name: "artifact_count"
+        source: "count of found artifacts"
+        displayed_as: "${artifact_count}"
+        consumers: ["collection summary"]
+
+    emotional_state:
+      entry: "Expectant -- audit is starting"
+      exit: "Satisfied that artifacts were found, or guided if not"
+
+    integration_checkpoint: |
+      At least one journey artifact (visual.md or .yaml) must exist in discuss/.
+      If zero artifacts found, display error path with guidance and skip audit.
+
+    failure_modes:
+      - "No journey artifacts found -- Phase 2 was not completed"
+      - "Only partial artifacts found (visual but no YAML, or vice versa)"
+      - "Artifacts exist but are malformed or empty"
+      - "Feature ID mismatch between DISCUSS context and file names"
+
+    gherkin: |
+      Scenario: All journey artifacts collected successfully
+        Given Marco completed Phase 2 for "view-invoice-history"
+        And journey-view-invoice-history-visual.md exists in discuss/
+        And journey-view-invoice-history.yaml exists in discuss/
+        And shared-artifacts-registry.md exists in discuss/
+        When the auditor collects artifacts
+        Then all 3 artifacts are found and loaded
+        And the audit proceeds with full coverage
+
+      Scenario: No journey artifacts found
+        Given Marco has not completed Phase 2 for "view-invoice-history"
+        And no journey files exist in discuss/
+        When the auditor attempts to collect artifacts
+        Then an error message explains that journey artifacts are required
+        And the error suggests completing Phase 2 first
+        And the error shows the command to check the feature-id
+        And the UX audit is skipped gracefully
+        And DISCUSS continues to Phase 3
+
+      Scenario: Partial artifacts trigger partial audit warning
+        Given Marco completed Phase 2 but only the visual markdown was saved
+        And journey-view-invoice-history.yaml is missing
+        When the auditor collects artifacts
+        Then a warning explains which analysis categories will be skipped
+        And the user is asked whether to proceed with partial audit
+
+  - id: 3
+    name: "UX Audit Execution"
+    action: "Analyze artifacts against 7 UX analysis categories"
+    phase: "Phase 2.75 (core)"
+
+    tui_mockup: |
+      +-- UX Audit ---------------------------------------------------+
+      |                                                                |
+      |  Running ${depth_level} UX audit...                            |
+      |                                                                |
+      |  [1/7] Nielsen's Usability Heuristics      ${cat_1_status}     |
+      |  [2/7] Norman's Design Principles          ${cat_2_status}     |
+      |  [3/7] Cognitive Load (Fitts, Hick, Miller) ${cat_3_status}    |
+      |  [4/7] ${platform} Platform Patterns       ${cat_4_status}     |
+      |  [5/7] Emotional Arc Coherence             ${cat_5_status}     |
+      |  [6/7] Error State Coverage                ${cat_6_status}     |
+      |  [7/7] Accessibility (WCAG 2.2 AA)         ${cat_7_status}     |
+      |                                                                |
+      |  Audit complete. ${finding_count} findings across              |
+      |  ${category_count} categories.                                 |
+      +----------------------------------------------------------------+
+
+    shared_artifacts:
+      - name: "platform"
+        source: "feature_type from Decision 1 or journey YAML metadata"
+        displayed_as: "${platform}"
+        consumers: ["category 4 label", "platform-specific pattern selection"]
+      - name: "finding_count"
+        source: "audit engine output"
+        displayed_as: "${finding_count}"
+        consumers: ["audit summary", "findings presentation"]
+      - name: "category_count"
+        source: "count of categories with findings"
+        displayed_as: "${category_count}"
+        consumers: ["audit summary"]
+
+    emotional_state:
+      entry: "Engaged -- watching the analysis run through familiar categories"
+      exit: "Anticipation -- how did my journey score?"
+
+    integration_checkpoint: |
+      Audit categories are scoped by depth_level:
+        lightweight -> categories 1 (top-5 only), 6
+        comprehensive -> all 7 categories
+        deep-dive -> all 7 categories + competitive analysis + before/after
+
+    failure_modes:
+      - "Audit runs but produces zero findings (handled in Step 4 as 'clean audit')"
+      - "Analysis category fails to parse artifact format (degrade gracefully, skip category)"
+      - "Depth level not recognized (default to comprehensive)"
+
+    gherkin: |
+      Scenario: Comprehensive audit runs all 7 categories
+        Given the depth level is "comprehensive"
+        And Marco's journey YAML and visual markdown are loaded
+        When the UX audit executes
+        Then all 7 analysis categories are evaluated
+        And progress is shown for each category as it completes
+        And the total finding count is displayed at completion
+
+      Scenario: Lightweight audit runs reduced checklist
+        Given the depth level is "lightweight"
+        And Yuki's journey YAML is loaded
+        When the UX audit executes
+        Then only Nielsen top-5 heuristics and error state coverage are evaluated
+        And the audit completes within 2 minutes
+        And skipped categories are not shown in progress
+
+      Scenario: Audit adapts to platform
+        Given the feature platform is "web"
+        When the UX audit evaluates platform patterns
+        Then web-specific patterns are applied (responsive design, loading states, form validation)
+        And TUI-specific patterns (NO_COLOR, exit codes, stdin piping) are not applied
+
+  - id: 4
+    name: "Findings Presentation"
+    action: "Display prioritized findings with severity, principle, and remediation"
+    phase: "Phase 2.75 (results)"
+
+    tui_mockup: |
+      +-- UX Audit Results -------------------------------------------+
+      |                                                                |
+      |  UX Audit Results: ${feature_id}                               |
+      |  Depth: ${depth_level} | Platform: ${platform}                 |
+      |  Duration: ${audit_duration}                                   |
+      |                                                                |
+      |  Score: ${overall_score}/100                                   |
+      |                                                                |
+      |  Top 3 findings (act on these first):                          |
+      |                                                                |
+      |  ${severity_1}  ${finding_1_title}                             |
+      |            ${finding_1_principle}                               |
+      |            ${finding_1_remediation}                             |
+      |                                                                |
+      |  ${severity_2}  ${finding_2_title}                             |
+      |            ${finding_2_principle}                               |
+      |            ${finding_2_remediation}                             |
+      |                                                                |
+      |  ${severity_3}  ${finding_3_title}                             |
+      |            ${finding_3_principle}                               |
+      |            ${finding_3_remediation}                             |
+      |                                                                |
+      |  ... ${remaining_count} more findings                          |
+      |                                                                |
+      |  View full report? [Y/n]                                       |
+      |  Save to ux-analysis.md? [Y/n]                                 |
+      +----------------------------------------------------------------+
+
+    shared_artifacts:
+      - name: "overall_score"
+        source: "weighted aggregate of category scores"
+        displayed_as: "${overall_score}"
+        consumers: ["findings header", "ux-analysis.md", "story enrichment priority"]
+      - name: "findings_list"
+        source: "audit engine output, sorted by severity"
+        displayed_as: "individual finding blocks"
+        consumers: ["findings presentation", "ux-analysis.md", "story enrichment"]
+      - name: "audit_duration"
+        source: "elapsed time from audit start to completion"
+        displayed_as: "${audit_duration}"
+        consumers: ["findings header"]
+
+    emotional_state:
+      entry: "Anticipation -- seeing the score"
+      exit: "Mix of 'oh, I missed that' and relief that most things were solid"
+
+    integration_checkpoint: |
+      Findings must be non-empty OR the clean-audit path must be triggered.
+      Each finding must have: severity, title, principle reference, remediation text.
+      Score must be 0-100 range.
+
+    failure_modes:
+      - "Zero findings -- show clean audit path (positive reinforcement)"
+      - "User disagrees with a finding -- provide dismiss with rationale workflow"
+      - "Too many findings overwhelm the user -- always show top 3 first, rest on demand"
+      - "Finding references a journey step that was renamed or removed"
+
+    gherkin: |
+      Scenario: Marco sees prioritized findings for his invoice journey
+        Given the audit found 12 issues in Marco's "view-invoice-history" journey
+        And 1 is critical, 2 are high, 4 are medium, 5 are low
+        When the findings are presented
+        Then the top 3 findings are shown first (critical and high severity)
+        And each finding includes the violated UX principle with reference
+        And each finding includes a specific remediation with concrete example
+        And the remaining 9 findings are available on request
+
+      Scenario: Yuki's CLI journey passes with minimal findings
+        Given the audit found 2 low-severity issues in Yuki's "deploy-service" journey
+        When the findings are presented
+        Then the score reflects high quality (95/100)
+        And the message is positive without being patronizing
+        And the save prompt defaults to NO (low-value report)
+
+      Scenario: Marco dismisses a finding he disagrees with
+        Given finding 4 recommends locale-aware date formatting
+        And Marco's users are developers who prefer ISO 8601
+        When Marco dismisses the finding
+        Then Marco can optionally provide a reason
+        And the finding is marked "dismissed (user decision)" in the report
+        And the dismissal reason is preserved for audit trail
+
+  - id: 5
+    name: "Report Generation"
+    action: "Save structured findings to ux-analysis.md"
+    phase: "Phase 2.75 (persist)"
+
+    tui_mockup: |
+      +-- Report Saved -----------------------------------------------+
+      |                                                                |
+      |  Saved: docs/feature/${feature_id}/discuss/ux-analysis.md      |
+      |                                                                |
+      |  Report includes:                                              |
+      |    - Executive summary with score                              |
+      |    - ${finding_count} findings grouped by severity              |
+      |    - Category scores (${categories_with_scores})                |
+      |    - Remediation guidance with before/after examples            |
+      |    - Accessibility checklist results                            |
+      +----------------------------------------------------------------+
+
+    shared_artifacts:
+      - name: "ux_analysis_path"
+        source: "docs/feature/{feature_id}/discuss/ux-analysis.md"
+        displayed_as: "${ux_analysis_path}"
+        consumers: ["story enrichment (Phase 3)", "DoR validation", "DESIGN handoff"]
+
+    emotional_state:
+      entry: "Decisive -- choosing to save"
+      exit: "Grounded -- evidence is captured and persistent"
+
+    integration_checkpoint: |
+      ux-analysis.md must be written before Phase 3 begins.
+      Format must be parseable by story enrichment step.
+
+    failure_modes:
+      - "File write fails (permissions, disk space)"
+      - "User declines to save -- findings only exist in session memory"
+
+    gherkin: |
+      Scenario: Report saved to discuss folder
+        Given Marco confirmed saving the UX analysis report
+        When the report is generated
+        Then ux-analysis.md is created in docs/feature/view-invoice-history/discuss/
+        And the report contains all accepted findings with remediation
+        And dismissed findings are included with "dismissed" status and user rationale
+        And the report is consumable by Phase 3 (story enrichment)
+
+  - id: 6
+    name: "Story Enrichment"
+    action: "UX findings feed into Phase 3 story crafting as additional AC and scenarios"
+    phase: "Transition from Phase 2.75 to Phase 3"
+
+    tui_mockup: |
+      +-- Story Enrichment -------------------------------------------+
+      |                                                                |
+      |  UX findings integrated into story crafting:                   |
+      |                                                                |
+      |  ${story_1_id} (${story_1_name}) enriched with:               |
+      |    + AC: ${enriched_ac_1}                                      |
+      |    + AC: ${enriched_ac_2}                                      |
+      |    + Scenario: "${enriched_scenario_1}"                        |
+      |                                                                |
+      |  ${enriched_story_count} stories enriched with                 |
+      |  ${enriched_ac_count} additional acceptance criteria           |
+      |  and ${enriched_scenario_count} new BDD scenarios.             |
+      |                                                                |
+      |  Continue to story mapping? [Y/n]                              |
+      +----------------------------------------------------------------+
+
+    shared_artifacts:
+      - name: "ux_findings_for_stories"
+        source: "ux-analysis.md (accepted findings only)"
+        displayed_as: "enriched AC and scenarios per story"
+        consumers: ["user-stories.md", "DoR validation"]
+      - name: "enriched_story_count"
+        source: "count of stories receiving UX-derived AC"
+        displayed_as: "${enriched_story_count}"
+        consumers: ["enrichment summary"]
+
+    emotional_state:
+      entry: "Curious -- how do findings translate to stories?"
+      exit: "Confident -- my stories now cover UX quality, not just functionality"
+
+    integration_checkpoint: |
+      Enriched stories must still pass DoR 9-item gate.
+      UX-derived AC must be solution-neutral (observable outcomes).
+      Each enriched AC must trace to a specific finding in ux-analysis.md.
+
+    failure_modes:
+      - "Finding cannot be mapped to any existing story -- create new story suggestion"
+      - "Enrichment produces too many AC for one story (>7) -- suggest splitting"
+      - "UX AC conflicts with existing functional AC -- flag for resolution"
+
+    gherkin: |
+      Scenario: Empty state finding enriches invoice list story
+        Given the UX audit found "missing empty state" (critical) at Step 3
+        And US-03 "View Invoice List" exists in the story backlog
+        When findings are mapped to stories
+        Then US-03 receives a new AC: "Empty state shows guidance message when no invoices exist"
+        And US-03 receives a new BDD scenario: "Invoice list guides first-time user"
+        And both trace back to "Nielsen H9" finding in ux-analysis.md
+
+      Scenario: Finding creates suggestion for new story
+        Given the UX audit found "no keyboard navigation for invoice actions"
+        And no existing story covers keyboard accessibility
+        When findings are mapped to stories
+        Then a new story suggestion is created: "Keyboard navigation for invoice list"
+        And the suggestion is marked as UX-derived with source finding reference
+
+integration_validation:
+  shared_artifact_consistency:
+    - artifact: "feature_id"
+      must_match_across: [1, 2, 3, 4, 5, 6]
+      failure_message: "Feature ID mismatch between smart gating and artifact collection"
+    - artifact: "depth_level"
+      must_match_across: [1, 3, 4, 5]
+      failure_message: "Depth level set at gating must be used consistently through audit and report"
+    - artifact: "platform"
+      must_match_across: [3, 4]
+      failure_message: "Platform detected at audit must match report labeling"
+    - artifact: "findings_list"
+      must_match_across: [4, 5, 6]
+      failure_message: "Findings shown must match saved report must match story enrichment input"
+
+changelog:
+  - date: "2026-04-15"
+    feature: "ux-analysis-discuss-integration"
+    change: "Initial journey design for integrated UX audit flow"

@@ -38,6 +38,28 @@ For greenfield projects (no src/ code, no docs/feature/ history), Luna proposes 
 2. Comprehensive -- full experience mapping with emotional arcs
 3. Deep-dive -- extensive user research, multiple personas, edge cases
 
+### Decision 4: UX Analysis (Smart Gating)
+
+After Decision 1 (Feature Type), evaluate feature characteristics and recommend whether a structured UX audit should run after journey design (Phase 2.75).
+
+**Gating logic** (automatic recommendation based on Decision 1 answers):
+- Evaluate 4 characteristics: user-facing (yes/no), interactive elements (yes/no), emotional complexity (low/medium/high), novelty (low/medium/high)
+- **YES (comprehensive)**: user-facing=yes AND (interactive=yes OR emotional>=medium OR novelty=high)
+- **YES (lightweight)**: user-facing=no BUT has user-readable output (error messages, status displays)
+- **NO**: user-facing=no AND no user-readable output AND novelty=low
+- Customer onboarding, payment, or destructive actions: always comprehensive or deep-dive
+
+**Prompt friction**:
+- YES recommendation: `Proceed with UX analysis? [Y/n]` (opt-out friction)
+- NO recommendation: `Run UX analysis anyway? [y/N]` (opt-in friction)
+
+**Depth mapping** (derives from Decision 3):
+- Decision 3 = Lightweight → UX audit depth = lightweight (2 min)
+- Decision 3 = Comprehensive → UX audit depth = comprehensive (10 min)
+- Decision 3 = Deep-dive → UX audit depth = deep-dive (30 min)
+
+The user can always override in either direction. When declining, show standalone command: `/nw-ux {feature-id}`
+
 ## Prior Wave Consultation
 
 Before beginning DISCUSS work, read SSOT and prior wave artifacts:
@@ -104,7 +126,23 @@ Luna runs deep discovery (mental model|emotional arc|shared artifacts|error path
 | Journey Schema | `docs/feature/{feature-id}/discuss/journey-{name}.yaml` (includes Gherkin per step — DISTILL extracts at wave start) |
 | Artifact Registry | `docs/feature/{feature-id}/discuss/shared-artifacts-registry.md` |
 
-**Phase 2.5 -- User Story Mapping:**
+**Phase 2.5 -- UX Analysis (conditional — Decision 4):**
+
+If Decision 4 recommended YES and user confirmed, delegate UX audit to @nw-ux-auditor via Task tool.
+
+Invocation: Execute UX audit for {feature-id} at {depth} depth. Mode: integrated. Feature type: {Decision 1}. Platform: {detected from journey YAML or visual markdown}.
+
+The auditor reads journey artifacts from Phase 2, analyzes against Apple HIG principles (primary) and Nielsen/Norman (supplementary), and produces prioritized findings.
+
+| Artifact | Path |
+|----------|------|
+| UX Analysis Report | `docs/feature/{feature-id}/discuss/ux-analysis.md` |
+
+After the auditor completes, its accepted findings feed into Phase 3 (User Stories) as additional acceptance criteria and BDD scenarios. Dismissed findings are recorded in the report but excluded from story enrichment.
+
+If Decision 4 recommended NO or user declined: skip this phase entirely. Note in `wave-decisions.md`: "UX analysis: skipped ({reason})".
+
+**Phase 2.75 -- User Story Mapping:**
 Luna loads `user-story-mapping` skill before this phase.
 
 Organizes discovered stories into a visual story map (backbone → walking skeleton → incremental slices). Produces prioritization suggestions based on outcomes identified in earlier phases.
@@ -120,7 +158,7 @@ Organizes discovered stories into a visual story map (backbone → walking skele
 
 **Phase 3 -- User Stories:**
 
-Luna crafts LeanUX stories informed by JTBD + journey artifacts. Every story traces to at least one job story. System constraints go in `## System Constraints` section at the top of user-stories.md. Validates against DoR, invokes peer review, prepares handoff.
+Luna crafts LeanUX stories informed by JTBD + journey artifacts + UX analysis findings (when Phase 2.5 ran). Every story traces to at least one job story. If `ux-analysis.md` exists, integrate accepted findings as additional acceptance criteria and BDD scenarios into relevant stories. Each enriched AC includes `(Source: UX audit, {finding-id})` for traceability. System constraints go in `## System Constraints` section at the top of user-stories.md. Validates against DoR, invokes peer review, prepares handoff.
 
 | Artifact | Path |
 |----------|------|
@@ -142,6 +180,8 @@ The invoked agent MUST create a task list from its workflow phases at the start 
 - [ ] Emotional arc coherent: confidence builds progressively
 - [ ] Shared artifacts tracked: every ${variable} has single documented source
 - [ ] Story map created with backbone, walking skeleton, release slices, and priority rationale
+- [ ] (when UX analysis ran) UX audit completed with findings prioritized by Apple HIG severity
+- [ ] (when UX analysis ran) Accepted findings integrated into user stories as AC and BDD scenarios
 - [ ] Outcome KPIs defined with measurable targets
 - [ ] (when DIVERGE artifacts present) Every user story traces to the validated job from DIVERGE
 - [ ] All UAT scenarios testable (AC derived from scenarios, embedded in user-stories.md)
@@ -152,7 +192,7 @@ The invoked agent MUST create a task list from its workflow phases at the start 
 ## Next Wave
 
 **Handoff To**: nw-solution-architect (DESIGN wave) + nw-platform-architect (DEVOPS wave, KPIs only)
-**Deliverables**: Journey artifacts (visual + YAML) + story map (with priority rationale) + user-stories + outcome KPIs
+**Deliverables**: Journey artifacts (visual + YAML) + story map (with priority rationale) + user-stories (enriched with UX findings when audit ran) + outcome KPIs + ux-analysis.md (when audit ran)
 
 ## Wave Decisions Summary
 
@@ -168,6 +208,16 @@ Before completing DISCUSS, produce `docs/feature/{feature-id}/discuss/wave-decis
 - Primary jobs/user needs: {1-3 sentence summary}
 - Walking skeleton scope: {if applicable}
 - Feature type: {user-facing|backend|infrastructure|cross-cutting}
+
+## UX Analysis
+- Executed: {yes|no|skipped}
+- Depth: {lightweight|comprehensive|deep-dive|n/a}
+- Score: {overall}/100 (or n/a if skipped)
+- Gating recommendation: {YES|NO} — {reason}
+- User decision: {accepted|overridden to YES|overridden to NO|n/a}
+- Findings: {N} total ({critical} critical, {high} high, {medium} medium, {low} low)
+- Findings integrated into stories: {N} accepted, {N} dismissed
+- Report: docs/feature/{feature-id}/discuss/ux-analysis.md (or n/a)
 
 ## Constraints Established
 - {constraint from requirements analysis}
@@ -197,7 +247,8 @@ SSOT files use `schema_version` and `changelog` fields. See canonical schemas in
   story-map.md                  (includes ## Priority Rationale)
   dor-validation.md
   outcome-kpis.md
-  wave-decisions.md
+  wave-decisions.md             (includes ## UX Analysis section)
+  ux-analysis.md                (when UX audit ran — findings + scores + remediation)
 ```
 
 ### SSOT updates (in `docs/product/`)

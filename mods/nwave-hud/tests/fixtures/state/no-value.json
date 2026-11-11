@@ -1,0 +1,1 @@
+{"schema": "nwave.hud_state.v1", "features": [{"id": "widget-color", "modified": "2026-11-10T12:00:00Z", "request": "Let the user pick a widget color", "value": null, "size": "M", "slices": [], "candidate": {"review": "pending"}}]}

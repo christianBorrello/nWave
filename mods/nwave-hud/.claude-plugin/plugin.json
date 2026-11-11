@@ -1,0 +1,6 @@
+{
+  "name": "nwave-hud",
+  "version": "0.1.0",
+  "description": "nWave HUD: shows the active nWave feature above the prompt (read-only).",
+  "types": "./types/index.d.ts"
+}

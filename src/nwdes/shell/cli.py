@@ -34,7 +34,7 @@ from nwdes.destinations import (
     readable_setting,
     resolve,
 )
-from nwdes.shell import host_sessions, probe
+from nwdes.shell import host_sessions, probe, state
 from nwdes.shell.asset_tree import decode_utf8, read_asset
 from nwdes.shell.filesystem import (
     check_paths,
@@ -1661,6 +1661,8 @@ def main(argv=None):
     defects = args.invocation.defects
     if args.verb == "delta":
         return _delta(args, defects)
+    if args.verb == "state":
+        return state.emit(args, _document_ports(args), defects, _inspection_failure)
     if args.verb == "work":
         return _work_set(args, defects)
     return _document(args, _document_ports(args), defects)

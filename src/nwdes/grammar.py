@@ -20,6 +20,7 @@ VERBS = (
     Verb("rework", ("set", "clear")),
     Verb("document"),
     Verb("delta"),
+    Verb("state"),
     Verb("prompt"),
     Verb("packet"),
     Verb("lane", ("open", "compose", "rekey", "integrate")),
@@ -423,6 +424,17 @@ COMMANDS = (
         ),
         (ROOT_REFUSALS[0], ROOT_REFUSALS[3]),
         "nwdes delta --previous previous.json --new current.json",
+    ),
+    Command(
+        "state",
+        None,
+        "Print where features stand as nwave.hud_state.v1 JSON; reads only.",
+        (
+            *ROOT_ARGUMENTS[:3],
+            Argument("--feature", "feature identity; omitted lists every feature"),
+        ),
+        (*ROOT_REFUSALS, ("FeatureUnknown", "the feature has no handoff")),
+        "nwdes state --feature search",
     ),
     Command(
         "prompt",

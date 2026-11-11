@@ -6058,7 +6058,7 @@ def invocation(verb, action, flags, project_root_is_directory=True):
     )
     scope = (
         Built(None)
-        if verb in ("schema", "delta")
+        if verb in ("schema", "delta") or (verb == "state" and not values["feature"])
         else build_scope("Project")
         if values["product"]
         else build_scope(

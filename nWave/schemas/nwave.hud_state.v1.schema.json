@@ -1,0 +1,31 @@
+{
+  "schema": "nwave.hud_state.v1",
+  "_description": "Output of nwdes state: a read-only projection of where features stand, built from each handoff, its open role drafts and its closed run records. features is always a list: the one feature named by --feature, or every feature of the configured feature directory, most recently modified first (empty when there is none). A stage nwdes cannot determine is null, never a guess; null differs from pending, which claims the stage has not started. skipped marks a stage that does not apply, such as the oracle of a prose-only slice. Slices appear in handoff order.",
+  "fields": {
+    "schema": "nwave.hud_state.v1",
+    "features": [
+      {
+        "id": "string",
+        "modified": "ISO-8601 UTC instant of the last handoff.json change|null",
+        "request": "string|null",
+        "value": "string|null",
+        "size": "S|M|L|null",
+        "slices": [
+          {
+            "id": "string",
+            "observation": "string|null",
+            "stages": {
+              "design": "done|recording|rejected|pending|skipped|null",
+              "oracle": "done|recording|rejected|pending|skipped|null",
+              "craft": "done|recording|rejected|pending|skipped|null",
+              "review": "done|recording|rejected|pending|skipped|null"
+            }
+          }
+        ],
+        "candidate": {
+          "review": "done|recording|rejected|pending|skipped|null"
+        }
+      }
+    ]
+  }
+}

@@ -34,7 +34,7 @@ function toSlice(raw: unknown): SliceModel | null {
   }
 }
 
-function toFeature(raw: unknown): FeatureModel | null {
+function toFeature(raw: unknown, otherIds: string[]): FeatureModel | null {
   if (!isRecord(raw) || !nonEmpty(raw.id) || !Array.isArray(raw.slices)) return null
   const slices: SliceModel[] = []
   for (const s of raw.slices) {
@@ -48,6 +48,8 @@ function toFeature(raw: unknown): FeatureModel | null {
     value: nonEmpty(raw.value) ? raw.value : null,
     slices,
     finalReview: toStage(candidate.review),
+    request: nonEmpty(raw.request) ? raw.request : null,
+    otherIds,
   }
 }
 
@@ -63,7 +65,10 @@ export function parseState(stdout: string): EngineOutcome {
   if (doc.schema !== SCHEMA) return { kind: 'degraded', reason: 'unexpected-schema' }
   if (!Array.isArray(doc.features)) return { kind: 'degraded', reason: 'malformed' }
   if (doc.features.length === 0) return { kind: 'degraded', reason: 'no-feature' }
-  const feature = toFeature(doc.features[0])
+  const otherIds = doc.features
+    .slice(1)
+    .flatMap(f => (isRecord(f) && nonEmpty(f.id) ? [f.id] : []))
+  const feature = toFeature(doc.features[0], otherIds)
   if (feature === null) return { kind: 'degraded', reason: 'malformed' }
   return { kind: 'ok', feature }
 }

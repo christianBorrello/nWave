@@ -1,6 +1,9 @@
 // Core: resolves the view. Imports neither the engine adapter's details nor the host.
 import { readActiveFeature } from './engine-adapter.ts'
+import { detailOf } from './detail.ts'
 import { flowOf } from './flow.ts'
+import { glyphOf } from './glyphs.ts'
+import type { Segment } from './glyphs.ts'
 import type { DegradedReason, HudView, RunPort, Stage } from './model.ts'
 
 const NOTES: Record<DegradedReason, string> = {
@@ -29,29 +32,17 @@ export async function resolveView(run: RunPort, root: string): Promise<HudView> 
       id: f.id,
       value: f.value,
       flow: flowOf(f.slices, f.finalReview),
+      detail: detailOf(f),
     }
   } catch {
     return degraded('internal')
   }
 }
 
-export type Tone = 'accent' | 'danger' | 'dim' | 'plain'
-export type Segment = { text: string; tone: Tone }
-
-// Filled = now, outline = next, cross = refused; null shows "—".
-const MARKS: Record<string, string> = {
-  recording: '●',
-  pending: '○',
-  rejected: '✖',
-  done: '✓',
-  skipped: '·',
-}
-
 function phaseSegment(phase: string | null, status: Stage): Segment {
   if (status === null || phase === null) return { text: '—', tone: 'plain' }
-  const tone: Tone =
-    status === 'rejected' ? 'danger' : status === 'recording' ? 'accent' : 'plain'
-  return { text: `${MARKS[status]} ${phase}`, tone }
+  const g = glyphOf(status)
+  return { text: `${g.text} ${phase}`, tone: g.tone }
 }
 
 /** The band's single row as tone-tagged segments (no colour knowledge here). */

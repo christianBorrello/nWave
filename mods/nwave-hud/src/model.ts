@@ -20,6 +20,27 @@ export type FeatureModel = {
   slices: SliceModel[]
   /** State of the final review of the whole feature. */
   finalReview: Stage
+  request: string | null
+  /** Ids of the other features the engine listed, in its order. */
+  otherIds: string[]
+}
+
+export type Stages4 = [Stage, Stage, Stage, Stage]
+
+export type SliceRow = {
+  id: string
+  observation: string | null
+  /** design, oracle, craft, review */
+  stages: Stages4
+  position: 'built' | 'current' | 'future'
+}
+
+/** What the open Flow draws, besides the closed row. JSON-serialisable. */
+export type DetailView = {
+  request: string | null
+  slices: SliceRow[]
+  finalReview: Stage
+  others: string[]
 }
 
 /** Where the work stands, ready to draw. JSON-serialisable. */
@@ -52,7 +73,7 @@ export type EngineOutcome =
 
 /** What the band draws: JSON-serialisable, so it can live in `$.state`. */
 export type HudView =
-  | { state: 'feature'; id: string; value: string | null; flow: FlowView }
+  | { state: 'feature'; id: string; value: string | null; flow: FlowView; detail: DetailView }
   | { state: 'degraded'; note: string }
 
 /** Minimal process port; `$.process.run` satisfies it structurally. */

@@ -9,7 +9,11 @@ const isBlockingReview = (s: Stage) => s === 'recording' || s === 'rejected'
 const isCraftFinished = (s: SliceModel) => !isOpen(s.stages.craft)
 
 /** A slice is finished when its craft is, and its own review is not in flight or refused. */
-const isFinished = (s: SliceModel) => isCraftFinished(s) && !isBlockingReview(s.stages.review)
+export const isFinished = (s: SliceModel) => isCraftFinished(s) && !isBlockingReview(s.stages.review)
+
+/** Index of the first unfinished slice, or -1 when all are built. */
+export const currentIndex = (slices: readonly SliceModel[]): number =>
+  slices.findIndex(s => !isFinished(s))
 
 export function flowOf(slices: readonly SliceModel[], finalReview: Stage): FlowView {
   if (slices.length === 0) return { kind: 'none' }
@@ -19,7 +23,8 @@ export function flowOf(slices: readonly SliceModel[], finalReview: Stage): FlowV
   const built = slices.filter(isCraftFinished).length
   const progress = `${isUnknown ? '—' : built}/${total}`
 
-  const slice = slices.find(s => !isFinished(s))
+  const index = currentIndex(slices)
+  const slice = slices[index]
   if (slice === undefined) return { kind: 'final', status: finalReview, progress }
 
   // A slice held back only by its review shows REVIEW; otherwise the first open stage.

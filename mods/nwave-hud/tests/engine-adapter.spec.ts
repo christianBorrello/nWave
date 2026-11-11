@@ -18,6 +18,8 @@ test('the first feature of the list is the active one, with its slices and final
         },
       ],
       finalReview: 'pending',
+      request: 'Let the user pick a widget color',
+      otherIds: ['older'],
     },
   })
 })

@@ -60,11 +60,11 @@ test('null craft: progress is —/total', () => {
 
 test('all slices built: final review shows candidate.review in the same forms', () => {
   const expected: Record<string, string> = {
-    done: '✓ REVIEW',
+    done: '● REVIEW',
     recording: '● REVIEW',
     rejected: '✖ REVIEW',
     pending: '○ REVIEW',
-    skipped: '· REVIEW',
+    skipped: '⊘ REVIEW',
     null: '—',
   }
   for (const [state, mark] of Object.entries(expected)) {
